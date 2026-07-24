@@ -153,7 +153,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><div><div class="card-title">Tu formulario público</div><div class="card-hint">Comparte este link en tus anuncios — aquí caen tus clientes a hacer pedidos</div></div></div>
+    <div class="card-head"><div><div class="card-title">Tu URL de webhook para Shopify</div><div class="card-hint">Pega esto en tu tienda Shopify: Configuración → Notificaciones → Webhooks → Crear webhook → Evento "Creación de pedido"</div></div></div>
     <div class="link-box"><code id="public-link">—</code><button class="btn btn-sm" id="copy-link">Copiar</button></div>
   </div>
 
@@ -162,15 +162,16 @@
     <form id="store-form">
       <div class="field-row">
         <div class="field"><label for="store-name">Nombre de la tienda</label><input type="text" id="store-name" required /></div>
-        <div class="field"><label for="store-slug">Identificador (parte del link, sin espacios)</label><input type="text" id="store-slug" pattern="[a-z0-9\-]+" required /></div>
+        <div class="field"><label for="store-slug">Identificador (parte de la URL del webhook, sin espacios)</label><input type="text" id="store-slug" pattern="[a-z0-9\-]+" required /></div>
       </div>
+      <div class="field"><label for="shopify-secret">Signing secret del webhook (Shopify te lo muestra al crearlo — opcional pero recomendado)</label><input type="password" id="shopify-secret" placeholder="whsec_..." /></div>
       <div class="card-hint" style="margin:4px 0 16px">Configuración de WhatsApp — la consigues en developers.facebook.com al crear tu app de WhatsApp Business (ver SETUP.md)</div>
       <div class="field-row">
         <div class="field"><label for="wa-phone-id">Phone Number ID (de Meta)</label><input type="text" id="wa-phone-id" placeholder="Ej: 109876543210987" /></div>
         <div class="field"><label for="wa-token">Access Token (de Meta)</label><input type="password" id="wa-token" placeholder="EAAxxxxxxxx..." /></div>
       </div>
       <div class="field"><label for="wa-notify">Tu número de WhatsApp para recibir avisos (con código de país, sin +)</label><input type="text" id="wa-notify" placeholder="593987654321" /></div>
-      <div class="field"><label for="wa-template">Mensaje de notificación (usa {nombre} {producto} {telefono} {direccion})</label><textarea id="wa-template"></textarea></div>
+      <div class="field"><label for="wa-template">Mensaje de notificación (usa {numero_pedido} {nombre} {producto} {telefono} {direccion})</label><textarea id="wa-template"></textarea></div>
       <div class="msg" id="store-msg" style="min-height:0"></div>
       <button type="submit" class="btn btn-primary">Guardar configuración</button>
     </form>
@@ -197,7 +198,7 @@
   var el = function (id) { return document.getElementById(id); };
   function show(n) { n.classList.remove("hidden"); } function hide(n) { n.classList.add("hidden"); }
   function escapeHtml(s) { return String(s || "").replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
-  var DEFAULT_TEMPLATE = "Nuevo pedido de {nombre} — {producto} — Tel: {telefono} — Direccion: {direccion}";
+  var DEFAULT_TEMPLATE = "Nuevo pedido #{numero_pedido} de {nombre} — {producto} — Tel: {telefono} — Direccion: {direccion}";
 
   function applyTheme() {
     var t = localStorage.getItem("cp-theme") || "auto";
@@ -247,9 +248,8 @@
 
   function slugify(s) { return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 
-  function publicFormUrl(slug) {
-    var base = location.href.replace(/dashboard\.html.*$/, "pedido.html");
-    return base + "?t=" + encodeURIComponent(slug);
+  function webhookUrl(slug) {
+    return CFG.functionsUrl + "/shopify-webhook?store=" + encodeURIComponent(slug);
   }
 
   function ensureStore() {
@@ -265,11 +265,12 @@
   function fillStoreForm() {
     el("store-name").value = store.store_name || "";
     el("store-slug").value = store.slug || "";
+    el("shopify-secret").value = store.shopify_webhook_secret || "";
     el("wa-phone-id").value = store.whatsapp_phone_number_id || "";
     el("wa-token").value = store.whatsapp_access_token || "";
     el("wa-notify").value = store.whatsapp_notify_number || "";
     el("wa-template").value = store.confirmation_template || DEFAULT_TEMPLATE;
-    el("public-link").textContent = publicFormUrl(store.slug);
+    el("public-link").textContent = webhookUrl(store.slug);
   }
 
   el("copy-link").addEventListener("click", function () {
@@ -286,6 +287,7 @@
     var payload = {
       store_name: el("store-name").value.trim() || "Mi Tienda",
       slug: newSlug,
+      shopify_webhook_secret: el("shopify-secret").value.trim() || null,
       whatsapp_phone_number_id: el("wa-phone-id").value.trim() || null,
       whatsapp_access_token: el("wa-token").value.trim() || null,
       whatsapp_notify_number: el("wa-notify").value.trim().replace(/\D/g, "") || null,

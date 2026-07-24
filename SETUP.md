@@ -1,153 +1,115 @@
 # ConfirmaPedido — Guía de instalación
 
 App con **registro de usuarios**: cada negocio crea su cuenta, configura su
-WhatsApp, y obtiene un link de formulario COD para poner en sus anuncios.
-Cuando un cliente lo llena, te llega la notificación por WhatsApp automático
-(API oficial de Meta — sin riesgo de baneo, gratis en volumen bajo).
+WhatsApp, y **conecta su formulario COD existente de Shopify** (Releasit,
+EasySell, Madgic, o cualquier otro — todos crean un pedido normal de Shopify
+por detrás). Cuando entra un pedido, Shopify te avisa automático a esta app,
+y esta app manda la notificación por WhatsApp con tu mensaje personalizado.
 
-Todo corre gratis en **Supabase + Netlify**, igual que tu app de Libertad
-Financiera.
+No se construye ningún formulario nuevo — te conectas al que ya usas.
 
 ---
 
-## PARTE 1 — Supabase (base de datos + funciones)
+## PARTE 1 — Supabase (ya la hicimos)
 
-### 1. Crea el proyecto
-Puedes usar un proyecto Supabase **nuevo** (recomendado, para no mezclar con
-tus datos de Libertad Financiera) en **supabase.com** → New project.
+Si ya corriste `supabase/schema.sql` una vez, **no lo vuelvas a correr
+completo** — solo corre `supabase/migration-01-shopify.sql` (SQL Editor →
+New query → pega → Run) para aplicar los cambios nuevos.
 
-### 2. Corre el esquema
-1. **SQL Editor → New query**
-2. Abre el archivo `supabase/schema.sql` de esta carpeta, copia **todo** el
-   contenido (sin las comillas de markdown si las hay) y pégalo
-3. **Run** — debe decir "Success"
+Si es un proyecto nuevo, corre `schema.sql` completo directamente.
 
-### 3. Copia tus llaves
-**Project Settings → API**:
-- **Project URL**
-- **anon / public key**
-
-Pégalas en **dashboard.html** Y en **pedido.html** (el mismo bloque
-`SUPABASE_CONFIG` en ambos archivos), y arma `functionsUrl` como tu Project
-URL + `/functions/v1` (ej: `https://abcdefgh.supabase.co/functions/v1`).
-
-### 4. Desactiva confirmación de correo (opcional, recomendado para arrancar rápido)
-**Authentication → Providers → Email** → desactiva "Confirm email".
-
-### 5. Instala Supabase CLI y despliega la Edge Function
-La función que manda el WhatsApp vive en `supabase/functions/submit-order/`
-y se despliega con la CLI de Supabase (no se sube arrastrando como los HTML).
-
+### Desplegar la función del webhook
 ```bash
-npm install -g supabase
-supabase login
+supabase functions deploy shopify-webhook
 ```
-(Se abre el navegador para autorizar — inicia sesión con tu cuenta de
-Supabase.)
-
-```bash
-cd confirma-pedido
-supabase link --project-ref TU-PROJECT-REF
-```
-(El `project-ref` es el código en tu Project URL: `https://TU-PROJECT-REF.supabase.co`)
-
-```bash
-supabase functions deploy submit-order
-```
-
-Eso sube la función. Verifica en el dashboard de Supabase → **Edge Functions**
-que aparezca `submit-order` como desplegada.
-
-> Las variables `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` que usa la función
-> ya están disponibles automáticamente en el entorno de Supabase — no hay que
-> configurarlas a mano.
 
 ---
 
 ## PARTE 2 — Meta (API oficial de WhatsApp)
 
-Esto lo hace **cada negocio que se registre**, no tú una sola vez — cada uno
-consigue su propio Phone Number ID y Access Token y los pega en su panel.
+Cada negocio que se registre configura esto en su propio panel.
 
 ### 1. Crea tu app en Meta for Developers
-1. Entra a **developers.facebook.com** → **My Apps** → **Create App**
-2. Tipo de app: **Business**
-3. Dale nombre, sigue el asistente
+1. **developers.facebook.com** → **My Apps** → **Create App** → tipo **Business**
+2. Agrega el producto **WhatsApp**
+3. Meta te da un **número de prueba gratis** con:
+   - **Phone Number ID**
+   - **Temporary Access Token** (dura 24h)
+4. Agrega tu propio WhatsApp como número de prueba verificado (hasta 5 gratis, sin verificar tu negocio)
 
-### 2. Agrega el producto WhatsApp
-1. En el panel de tu app, busca **WhatsApp** → **Set up**
-2. Meta te da automáticamente un **número de prueba gratis** (no necesitas
-   verificar tu negocio todavía para empezar a probar)
-3. Ahí mismo verás:
-   - **Phone Number ID** (un número largo, ej: `109876543210987`)
-   - **Temporary Access Token** (dura 24h — para producción necesitas uno
-     permanente, ver paso 4)
+### 2. Token permanente (para producción)
+**Business Settings → System Users** → crea uno → asígnale el activo de
+WhatsApp → genera un token con permiso `whatsapp_business_messaging` (no expira).
 
-### 3. Agrega un número destino de prueba
-Meta te deja agregar hasta 5 números "verificados" para pruebas sin verificar
-tu negocio — agrega tu propio WhatsApp ahí para recibir las notificaciones de
-prueba.
-
-### 4. Para producción: Access Token permanente
-El token temporal expira en 24h. Para uno permanente:
-1. **Business Settings → System Users** → crea un System User
-2. Asígnale el activo de WhatsApp de tu app
-3. Genera un token para ese System User con permiso `whatsapp_business_messaging`
-   — este no expira
-
-### 5. Verificación de negocio (para salir de modo prueba)
-Cuando quieras mandar mensajes a números que no agregaste manualmente (o sea,
-a tus clientes reales), Meta pide verificar tu negocio — **Business Settings
-→ Business Verification**. Toma unos días, es gratis.
-
-### 6. Pega tus datos en el panel de ConfirmaPedido
-Con Phone Number ID + Access Token + tu número (el que recibe las
-notificaciones), entra a tu dashboard de ConfirmaPedido → **Configuración de
-tienda** → pégalos ahí y guarda.
+### 3. Pega tus datos en el dashboard de ConfirmaPedido
+Phone Number ID + Access Token + tu número de WhatsApp para recibir avisos.
 
 ---
 
-## PARTE 3 — Publicar en Netlify
+## PARTE 3 — Conectar tu formulario de Shopify (la parte nueva)
 
-1. Ve a **app.netlify.com/drop**
-2. Arrastra la carpeta `confirma-pedido` completa (con `dashboard.html` y
-   `pedido.html` ya con tus llaves pegadas)
-3. Te da un link, ej `https://algo.netlify.app`
+### 1. Consigue tu URL de webhook
+Entra a tu **dashboard.html**, en la tarjeta **"Tu URL de webhook para
+Shopify"** — cópiala. Se ve así:
+```
+https://tu-proyecto.supabase.co/functions/v1/shopify-webhook?store=tu-slug
+```
 
-Tus 2 páginas quedan en:
-- `https://algo.netlify.app/dashboard.html` — donde te registras y configuras
-- `https://algo.netlify.app/pedido.html?t=tu-slug` — el link que compartes en
-  tus anuncios (el slug lo defines tú en el panel)
+### 2. Crea el webhook en Shopify
+1. En tu tienda Shopify: **Configuración → Notificaciones**
+2. Baja hasta **Webhooks** → **Crear webhook**
+3. **Evento**: `Creación de pedido` (Order creation)
+4. **Formato**: JSON
+5. **URL**: pega la que copiaste del dashboard
+6. Guarda
+
+### 3. Copia el "Signing secret"
+Shopify te muestra un **signing secret** (empieza distinto según tu tienda) —
+cópialo y pégalo en el dashboard de ConfirmaPedido, campo **"Signing secret
+del webhook"**, y guarda. Esto verifica que los avisos sean realmente de
+Shopify (nadie más puede mandarte falsos).
+
+> Si usas Releasit, EasySell, Madgic u otra app de COD Form: no necesitas
+> configurar nada en esa app — como todas terminan creando un pedido de
+> Shopify normal, el webhook de "Creación de pedido" las captura a todas por
+> igual, sin importar cuál uses.
 
 ---
 
-## Cómo se prueba todo el flujo
+## PARTE 4 — Publicar en Netlify
 
-1. Entra a `dashboard.html`, crea tu cuenta
-2. En "Configuración de tienda" pega tus datos de Meta (Parte 2) y guarda
-3. Copia tu link público
-4. Ábrelo en otra pestaña (o pásaselo a alguien), llena el formulario como si
-   fueras cliente
-5. Debería llegarte un WhatsApp automático al número que configuraste
+Ya está conectado a GitHub — cada vez que se sube un cambio, Netlify lo
+publica solo. Solo entra a tu link de Netlify → `/dashboard.html`.
+
+---
+
+## Cómo probar todo el flujo
+
+1. Entra a `dashboard.html`, crea tu cuenta (o inicia sesión)
+2. Configura tu WhatsApp (Parte 2) y tu Signing secret (Parte 3.3)
+3. Copia tu URL de webhook (Parte 3.1) y créala en Shopify (Parte 3.2)
+4. Haz un pedido de prueba en tu tienda (usando tu formulario COD normal)
+5. Debería llegarte un WhatsApp automático en segundos
 6. En el dashboard, en "Pedidos", debe aparecer la fila nueva con
-   "WhatsApp: Enviado" ✅ — si dice "Falló", pasa el mouse sobre el chip para
-   ver el error exacto que devolvió Meta
+   "WhatsApp: Enviado" ✅
 
 ## Si "WhatsApp: Falló"
 
-Los errores más comunes de Meta y qué significan:
-- **"(#131030) Recipient phone number not in allowed list"** — en modo
-  prueba, solo puedes mandar a los números que agregaste en el paso 3 de la
-  Parte 2. Agrega tu número de pruebas ahí.
-- **"Invalid OAuth access token"** — el token expiró (si usas el temporal de
-  24h) o está mal copiado. Genera uno permanente (paso 4).
-- **"(#100) Invalid parameter"** — revisa que el Phone Number ID sea el
-  correcto (no el número de teléfono en sí, es el ID interno de Meta).
+- **"Firma inválida — este aviso no parece venir de Shopify"** — el Signing
+  secret que pegaste no coincide con el que te dio Shopify. Vuelve a copiarlo
+  desde Shopify (Configuración → Notificaciones → tu webhook) y pégalo de nuevo.
+- **"(#131030) Recipient phone number not in allowed list"** — en modo prueba
+  de Meta, solo puedes mandar a los números que agregaste como verificados
+  (Parte 2, paso 1.4).
+- **"Invalid OAuth access token"** — el token expiró o está mal copiado.
+  Genera uno permanente (Parte 2, paso 2).
+- **"El pedido no trae número de teléfono"** — el formulario COD que usas no
+  está capturando el teléfono en el campo que Shopify espera. Revisa la
+  configuración de tu app COD Form.
 
 ## Multi-usuario (varios negocios usando la misma app)
 
-Cada quien que se registre en `dashboard.html` tiene su **propia fila** en
-`stores`, su propio slug, su propio Phone Number ID/Token — completamente
-aislados por Row Level Security (nadie ve los pedidos ni credenciales de
-otro). No necesitas hacer nada extra para que esto funcione con varios
-clientes tuyos a la vez.
+Cada quien que se registre tiene su propia fila en `stores`, su propio slug
+(y por lo tanto su propia URL de webhook), su propio Phone Number ID/Token —
+todo aislado por seguridad a nivel de fila. Cada cliente tuyo conecta su
+propia tienda Shopify al webhook con su slug único, sin pisarse entre ellos.
